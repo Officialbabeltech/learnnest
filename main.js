@@ -1,31 +1,251 @@
+
 import { firebaseConfig, subscription } from './config.js';
+
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+
+import {
+  getFirestore,
+  doc,
+  getDoc
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+const $ = (id) => document.getElementById(id);
+
+let auth;
+let db;
+let currentUser = null;
+let approved = false;
 
 const subjects = [
- {id:'mathematics',name:'Mathematics',icon:'∑',desc:'Numbers, algebra, geometry and problem-solving',color:'#f0ecff',intro:'Mathematics helps us describe patterns, quantities and relationships.',topic:'Algebra: expressions and equations',note:'An equation says two expressions have the same value. To solve 2x + 4 = 10, subtract 4 from both sides to get 2x = 6, then divide by 2. Therefore x = 3.',question:'Solve: 3x + 2 = 14',options:['x = 3','x = 4','x = 5','x = 6'],answer:1,explain:'Subtract 2 from both sides: 3x = 12. Divide by 3: x = 4.'},
- {id:'english',name:'English Language',icon:'Aa',desc:'Grammar, comprehension, vocabulary and writing',intro:'English helps you communicate clearly in speech and writing.',topic:'Parts of speech',note:'A noun names a person, place, thing or idea. A verb expresses an action or state. An adjective describes a noun. Example: “The bright student reads.” Bright is an adjective; reads is a verb.',question:'Which word is the verb in “The child sings loudly”?',options:['child','sings','loudly','the'],answer:1,explain:'“Sings” is the verb because it expresses the action.'},
- {id:'biology',name:'Biology',icon:'♧',desc:'Living things, cells, ecology and human biology',intro:'Biology is the scientific study of living organisms and their interactions.',topic:'Cells: the basic unit of life',note:'Cells are the basic structural and functional units of living things. The cell membrane controls what enters and leaves a cell. The nucleus contains genetic material in most plant and animal cells.',question:'Which structure controls many activities of a plant or animal cell?',options:['Cell wall only','Nucleus','Vacuole only','Chlorophyll'],answer:1,explain:'The nucleus contains DNA and helps regulate cell activities.'},
- {id:'chemistry',name:'Chemistry',icon:'⚗',desc:'Atoms, elements, compounds and reactions',intro:'Chemistry studies matter, its properties and how substances change.',topic:'Atoms and elements',note:'An atom has a nucleus containing protons and usually neutrons, with electrons around it. An element contains one type of atom. Water (H₂O) is a compound made from hydrogen and oxygen.',question:'What is the chemical formula for water?',options:['CO₂','O₂','H₂O','NaCl'],answer:2,explain:'Water contains hydrogen and oxygen, with formula H₂O.'},
- {id:'physics',name:'Physics',icon:'ϟ',desc:'Motion, forces, energy, waves and electricity',intro:'Physics explains how matter and energy behave in the universe.',topic:'Speed, distance and time',note:'Average speed = distance ÷ time. If a learner travels 100 metres in 20 seconds, average speed is 100 ÷ 20 = 5 metres per second (m/s). Always include units in your answer.',question:'A cyclist travels 60 km in 3 hours. What is the average speed?',options:['15 km/h','20 km/h','30 km/h','180 km/h'],answer:1,explain:'Speed = 60 km ÷ 3 h = 20 km/h.'},
- {id:'government',name:'Government',icon:'⚖',desc:'Civic structures, constitutions and citizenship',intro:'Government studies how societies make decisions and organise public authority.',topic:'The three arms of government',note:'In many democratic systems, the legislature makes laws, the executive implements laws and policies, and the judiciary interprets laws and resolves disputes. Their exact powers depend on the country’s constitution.',question:'Which arm primarily interprets laws?',options:['Legislature','Executive','Judiciary','Electoral commission'],answer:2,explain:'The judiciary interprets laws and resolves legal disputes.'},
- {id:'economics',name:'Economics',icon:'₦',desc:'Needs, scarcity, markets and resource allocation',intro:'Economics examines how people and societies use limited resources.',topic:'Scarcity and choice',note:'Scarcity means resources are limited relative to wants. Because people cannot have everything, they make choices. Opportunity cost is the next-best alternative given up when a choice is made.',question:'Opportunity cost is best described as…',options:['Every item in a shop','The next-best alternative forgone','Money printed by a bank','A free gift'],answer:1,explain:'Opportunity cost is the value of the next-best alternative forgone.'},
- {id:'geography',name:'Geography',icon:'⌖',desc:'Maps, climate, landforms and human environments',intro:'Geography explores places, environments and relationships between people and the Earth.',topic:'Map scale',note:'A map scale relates distance on a map to distance on the ground. At a scale of 1:100,000, 1 cm on the map represents 100,000 cm on the ground, which equals 1 km.',question:'At a scale of 1:50,000, 1 cm on the map represents…',options:['50 m','500 m','5 km','50 km'],answer:1,explain:'50,000 cm equals 500 m, so 1 cm represents 500 m.'}
+  ['Mathematics', '➗', ['Numbers', 'Algebra', 'Geometry', 'Statistics']],
+  ['English Language', '📚', ['Grammar', 'Comprehension', 'Vocabulary', 'Essay writing']],
+  ['Biology', '🧬', ['Cells', 'Nutrition', 'Ecology', 'Reproduction']],
+  ['Chemistry', '⚗️', ['Atoms', 'Periodic table', 'Chemical reactions', 'Acids and bases']],
+  ['Physics', '🔭', ['Motion', 'Energy', 'Waves', 'Electricity']],
+  ['Government', '🏛️', ['Constitution', 'Democracy', 'Arms of government', 'Political parties']],
+  ['Economics', '📈', ['Demand and supply', 'Production', 'Money', 'Banking']],
+  ['Geography', '🌍', ['Map reading', 'Climate', 'Landforms', 'Population']]
 ];
-let auth=null, db=null, currentUser=null, approved=false, toastTimer;
-const $=id=>document.getElementById(id);
-function toast(message){const el=$('toast');el.textContent=message;el.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',3200)}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function waLink(message){return `https://wa.me/${subscription.whatsappNumber}?text=${encodeURIComponent(message)}`}
-function renderSubjects(){ $('subjectGrid').innerHTML=subjects.map(s=>`<button class="subject-card" data-subject="${s.id}" aria-label="Open ${s.name}"><span class="arrow">↗</span><span class="subject-icon" style="background:${s.color||'#f0ecff'}">${s.icon}</span><h3>${s.name}</h3><p>${s.desc}</p></button>`).join('');document.querySelectorAll('[data-subject]').forEach(b=>b.addEventListener('click',()=>openSubject(b.dataset.subject))); }
-function openSubject(id){const s=subjects.find(x=>x.id===id);if(!s)return; $('lessonArea').classList.remove('hidden');$('lessonContent').innerHTML=`<div class="lesson-header"><p class="eyebrow">SUBJECT LESSON</p><h2>${s.icon} ${s.name}</h2><p>${s.intro}</p></div><div class="lesson-content"><article class="panel"><p class="eyebrow">LESSON NOTE</p><h3>${s.topic}</h3><p>${s.note}</p><div class="lesson-note"><strong>Study tip</strong><p>Read the explanation, write down the key idea in your own words, and try the question without looking at the answer first.</p></div></article><article class="panel"><p class="eyebrow">QUICK PRACTICE</p><h3>${s.question}</h3><form id="quizForm">${s.options.map((o,i)=>`<label class="quiz-option"><input type="radio" name="answer" value="${i}" required>${esc(o)}</label>`).join('')}<button class="btn btn-primary" type="submit">Check answer</button></form><div id="quizFeedback" class="feedback hidden" aria-live="polite"></div><p class="tiny">Practice questions are starter examples; teachers should expand the curriculum.</p></article></div>`;$('lessonArea').scrollIntoView({behavior:'smooth'});$('quizForm').addEventListener('submit',e=>{e.preventDefault();if(!approved){$('quizFeedback').classList.remove('hidden');$('quizFeedback').textContent='Full practice access requires an approved subscription. Please use the subscription section and wait for payment verification.';return;}const selected=Number(new FormData(e.currentTarget).get('answer'));const f=$('quizFeedback');f.classList.remove('hidden');f.textContent=(selected===s.answer?'Correct! ':'Not quite. ')+s.explain;});}
-$('backSubjects').addEventListener('click',()=>{$('lessonArea').classList.add('hidden');$('subjects').scrollIntoView({behavior:'smooth'});});
-$('whatsappPay').href=waLink(`Hello LearnNest, I want to subscribe for ₦${subscription.monthlyPrice} per month for all subjects. Please confirm the payment instructions. Bank: ${subscription.bankName}; account name: ${subscription.accountName}; account number: ${subscription.accountNumber}. I will send my receipt here. My name and Google account email are: `);
-$('liveRequest').href=waLink('Hello LearnNest, I would like to request a live lesson. Subject: ____. Preferred day/time: ____. My name and Google account email are: ____. Please confirm availability and send a Google Meet invitation if arranged.');
-$('copyAccount').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(subscription.accountNumber);toast('Account number copied.')}catch{toast('Account number: '+subscription.accountNumber)}});
-$('year').textContent=new Date().getFullYear();renderSubjects();
-function configReady(){return firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('YOUR_') && firebaseConfig.projectId && !firebaseConfig.projectId.startsWith('YOUR_')}
-async function refreshSubscription(){if(!currentUser||!db){approved=false;$('subscriptionStatus').textContent='Sign in with Google and configure Firebase first. After your transfer, send the receipt through WhatsApp and wait for administrator approval.';return} $('subscriptionStatus').textContent='Checking your subscription…';try{const snap=await getDoc(doc(db,'subscriptions',currentUser.uid));const d=snap.exists()?snap.data():{};const expires=d.expiresAt?.toDate?d.expiresAt.toDate():null;approved=d.status==='approved'&&(!expires||expires>Date.now());$('subscriptionStatus').textContent=approved?`Your subscription is approved${expires?` until ${expires.toLocaleDateString()}`:''}. Enjoy LearnNest!`:'No active approved subscription was found. Transfer ₦2,500, send your receipt on WhatsApp, and wait for the administrator to verify the payment.';}catch(e){approved=false;$('subscriptionStatus').textContent='Could not check status. Check Firebase setup and Firestore rules, then try again.';}}
-$('refreshSubscription').addEventListener('click',refreshSubscription);
-if(!configReady()){$('signInBtn').addEventListener('click',()=>toast('Set up Firebase using README.md before Google sign-in can work.'));$('subscriptionStatus').textContent='Firebase setup required for Google sign-in and subscription status. WhatsApp payment and subject sample pages are ready to preview.';}else{try{const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);$('signInBtn').addEventListener('click',async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){toast('Google sign-in failed: '+e.message)}});$('signOutBtn').addEventListener('click',()=>signOut(auth));onAuthStateChanged(auth,async user=>{currentUser=user;$('userLabel').textContent=user?user.displayName||user.email:'Not signed in';$('signInBtn').classList.toggle('hidden',!!user);$('signOutBtn').classList.toggle('hidden',!user);await refreshSubscription()})}catch(e){console.error(e);toast('Firebase could not start. Check your configuration.')}}
+
+function toast(message) {
+  const el = $('toast');
+  if (!el) {
+    alert(message);
+    return;
+  }
+  el.textContent = message;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 5000);
+}
+
+function showMessage(id, message) {
+  const el = $(id);
+  if (el) el.textContent = message;
+}
+
+function openWhatsApp(message) {
+  const number = String(subscription?.whatsappNumber || '').replace(/\D/g, '');
+  if (!number) {
+    toast('WhatsApp number is missing in js/config.js.');
+    return;
+  }
+  window.open(
+    `https://wa.me/${number}?text=${encodeURIComponent(message)}`,
+    '_blank'
+  );
+}
+
+function renderSubjects() {
+  const grid = $('subjectGrid');
+  if (!grid) return;
+
+  grid.replaceChildren();
+
+  subjects.forEach(([name, icon, topics]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'subject-card';
+
+    const title = document.createElement('h3');
+    title.textContent = `${icon} ${name}`;
+
+    const description = document.createElement('p');
+    description.textContent = 'Tap to view study topics.';
+
+    button.append(title, description);
+    button.addEventListener('click', () => {
+      const content = $('lessonContent');
+      if (!content) {
+        toast('Lesson section is missing from index.html.');
+        return;
+      }
+
+      content.replaceChildren();
+
+      const heading = document.createElement('h2');
+      heading.textContent = name;
+
+      const list = document.createElement('ul');
+      topics.forEach(topic => {
+        const item = document.createElement('li');
+        item.textContent = topic;
+        list.appendChild(item);
+      });
+
+      const note = document.createElement('p');
+      note.textContent = approved
+        ? 'Your subscription is approved.'
+        : 'These are sample topics. Payment approval is required for subscription lessons.';
+
+      content.append(heading, list, note);
+      $('subjectGrid')?.classList.add('hidden');
+      $('lessonArea')?.classList.remove('hidden');
+    });
+
+    grid.appendChild(button);
+  });
+}
+
+function setupButtons() {
+  $('backSubjects')?.addEventListener('click', () => {
+    $('lessonArea')?.classList.add('hidden');
+    $('subjectGrid')?.classList.remove('hidden');
+  });
+
+  $('whatsappPay')?.addEventListener('click', () => {
+    openWhatsApp(
+      `Hello, I want to subscribe to LearnNest for ₦${subscription.monthlyPrice || 2500} per month. Please confirm payment details.`
+    );
+  });
+
+  $('liveRequest')?.addEventListener('click', () => {
+    openWhatsApp('Hello, I would like to request a live lesson on LearnNest.');
+  });
+
+  $('copyAccount')?.addEventListener('click', async () => {
+    const details =
+      `Bank: ${subscription.bankName || 'Opay'}\n` +
+      `Account name: ${subscription.accountName || 'Babel Tech'}\n` +
+      `Account number: ${subscription.accountNumber || ''}\n` +
+      `Amount: ₦${subscription.monthlyPrice || 2500}`;
+
+    try {
+      await navigator.clipboard.writeText(details);
+      toast('Payment details copied.');
+    } catch {
+      toast(details);
+    }
+  });
+
+  $('refreshSubscription')?.addEventListener('click', refreshSubscription);
+}
+
+async function refreshSubscription() {
+  const status = $('subscriptionStatus');
+  if (!status) return;
+
+  if (!currentUser || !db) {
+    approved = false;
+    status.textContent = 'Sign in with Google to check your subscription.';
+    return;
+  }
+
+  status.textContent = 'Checking subscription...';
+
+  try {
+    const snap = await getDoc(doc(db, 'subscriptions', currentUser.uid));
+    const data = snap.exists() ? snap.data() : {};
+    const expiry = data.expiresAt?.toDate
+      ? data.expiresAt.toDate()
+      : null;
+
+    approved =
+      data.status === 'approved' &&
+      (!expiry || expiry.getTime() > Date.now());
+
+    status.textContent = approved
+      ? 'Your subscription is approved. Enjoy LearnNest!'
+      : 'No active approved subscription found. Send your payment receipt to the administrator.';
+  } catch (error) {
+    console.error(error);
+    status.textContent =
+      `Subscription check failed: ${error.code || error.message}`;
+  }
+}
+
+function setupFirebase() {
+  const signIn = $('signInBtn');
+  const signOutButton = $('signOutBtn');
+
+  if (!firebaseConfig?.apiKey || !firebaseConfig?.projectId) {
+    showMessage('subscriptionStatus', 'Check Firebase settings in js/config.js.');
+    signIn?.addEventListener('click', () =>
+      toast('Firebase configuration is missing.')
+    );
+    return;
+  }
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    signIn?.addEventListener('click', async () => {
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      } catch (error) {
+        console.error('Sign-in error:', error);
+        toast(`Google sign-in failed: ${error.code || error.message}`);
+      }
+    });
+
+    signOutButton?.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        toast(`Sign-out failed: ${error.message}`);
+      }
+    });
+
+    onAuthStateChanged(auth, async user => {
+      currentUser = user;
+
+      showMessage(
+        'userLabel',
+        user ? (user.displayName || user.email) : 'Not signed in'
+      );
+
+      signIn?.classList.toggle('hidden', !!user);
+      signOutButton?.classList.toggle('hidden', !user);
+
+      await refreshSubscription();
+    });
+  } catch (error) {
+    console.error('Firebase setup error:', error);
+    showMessage(
+      'subscriptionStatus',
+      `Firebase setup failed: ${error.message}`
+    );
+    toast(`Firebase setup failed: ${error.message}`);
+  }
+}
+
+function start() {
+  showMessage('year', String(new Date().getFullYear()));
+  renderSubjects();
+  setupButtons();
+  setupFirebase();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', start, { once: true });
+} else {
+  start();
+}
